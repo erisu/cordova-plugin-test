@@ -1,0 +1,66 @@
+{
+  "name": "mock-cordova-plugin-template",
+  "version": "0.0.1-dev.0",
+  "description": "Mock Cordova Plugin",
+  "homepage": "https://github.com/erisu/mock-cordova-plugin-template#readme",
+  "repository": {
+    "type": "git",
+    "url": "github:erisu/mock-cordova-plugin-template.git"
+  },
+  "bugs": {
+    "url": "https://github.com/erisu/mock-cordova-plugin-template/issues"
+  },
+  "keywords": [
+    "ecosystem:cordova",
+    "ecosystem:phonegap",
+    "cordova-ios",
+    "cordova-android",
+    "cordova-windows",
+    "cordova-browser",
+    "cordova:plugin"
+  ],
+  "scripts": {
+    "eslint": "eslint ./",
+    "test": "npm run eslint && nyc jasmine --config=spec/coverage.json",
+    "postversion": "node scripts/version.js"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "eslint": "^5.16.0",
+    "eslint-config-semistandard": "^13.0.0",
+    "eslint-config-standard": "^12.0.0",
+    "eslint-plugin-import": "^2.17.3",
+    "eslint-plugin-node": "^8.0.1",
+    "eslint-plugin-promise": "^4.1.1",
+    "eslint-plugin-standard": "^4.0.0",
+    "execa": "^1.0.0",
+    "jasmine": "^3.4.0",
+    "nopt": "^4.0.1",
+    "nyc": "^14.1.1",
+    "xml-js": "^1.6.11"
+  },
+  "author": "Erisu",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=10.0.0",
+    "cordovaDependencies": {}
+  },
+  "cordova": {
+    "id": "mock-cordova-plugin-template",
+    "platforms": [
+      "ios",
+      "android",
+      "windows",
+      "browser"
+    ]
+  },
+  "nyc": {
+    "include": [
+      "www"
+    ],
+    "reporter": [
+      "lcov",
+      "text"
+    ]
+  }
+}

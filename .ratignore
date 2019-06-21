@@ -1,0 +1,5 @@
+LICENSE
+NOTICE
+node_modules/*
+*.json
+.*
