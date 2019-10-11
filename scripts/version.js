@@ -23,6 +23,8 @@ const path = require('path');
 const { existsSync, readFileSync, writeFileSync } = require('fs');
 const { xml2json, json2xml } = require('xml-js');
 const execa = require('execa');
+const toSemver = require('to-semver');
+const issueRegex = require('issue-regex');
 
 const _ROOT = path.join(require.main.filename, '..', '..');
 
@@ -39,6 +41,12 @@ class Git {
     commit (message) {
         console.info(`[git] Commiting bump verion with message: ${message}`);
         return execa.stdout('git', ['commit', '-S', '-m', message], { cwd: this.dir });
+    }
+
+    diffLog (version) {
+        console.info('[git] Fetching  Diff Logs');
+        version = version ? `master...${version}` : 'master';
+        return execa.stdout('git', ['log', '--pretty=format:- %s', version], { cwd: this.dir });
     }
 
     push (branch) {
@@ -59,8 +67,13 @@ class Git {
     }
 
     tag (tag) {
-        console.info(`[git] Creating new tag: ${tag}`);
-        return execa.stdout('git', ['tag', tag], { cwd: this.dir });
+        if (tag) {
+            console.info(`[git] Creating new tag: ${tag}`);
+        } else {
+            console.info(`[git] Fetch tags.`);
+        }
+        
+        return execa.stdout('git', ['tag'].concat(tag ? [tag] : []), { cwd: this.dir });
     }
 }
 
@@ -104,9 +117,7 @@ class VersionPostProcess {
     }
 
     _updatePluginXml () {
-        if (!this.pluginXmlJson) {
-            this._loadPluginXml();
-        }
+        if (!this.pluginXmlJson) this._loadPluginXml();
 
         // Update plugin.xml version.
         console.info(`[plugin.xml] Updating version to: ${this.pkgJson.version}`);
@@ -134,25 +145,77 @@ class VersionPostProcess {
         return Promise.resolve();
     }
 
+    _updateChangeLog () {
+        // if (this.pkgJson.version.includes('-dev')) return Promise.resolve();
+        const changeLogFile = path.join(_ROOT, 'CHANGELOG.md');
+        if (!existsSync(changeLogFile)) return Promise.resolve();
+
+        console.info(`[change-log] Updating ChangeLog`);
+        return this.git.tag()
+            // convert string list to array
+            .then(tags => tags.split('\n'))
+            // return only release tags with out the `rel/` prefix
+            .then(tags => tags
+                .filter(tag => tag.includes('draft/'))
+                .map(tag => tag.replace(/^draft\//, ''))
+            )
+            // sort list from newest to oldest based on semver
+            .then(versions => toSemver(versions))
+            // return the last release tag
+            .then(versions => versions.length > 0 ? versions[0] : null)
+            // get diff logs from last release tag to master, or return all
+            .then(version => this.git.diffLog(`draft/${version}`))
+            // update CHANGELOG.md
+            .then(log => {
+                log = log.split('\n');
+                log.push('- fixes: #1');
+                log.push('- some random pr (#2)');
+                log.push('- pr that fixes #3 (#4)');
+
+                const rx = new RegExp(`(${issueRegex().source})`, 'g');
+                log.forEach((commit, i) => {
+                    log[i] = commit.split(rx).reduce((prev, curr, i) => {
+                        if (i % 2) {
+                            const ticket = curr.split('#');
+                            prev = `[GH-${ticket[1]}](${this.pkgJson.bugs.url}/${ticket[1]})`;
+                        }
+
+                        return prev;
+                    });
+                }).join();
+                const changeLog = readFileSync(changeLogFile)
+                    .toString()
+                    .split('\n');
+
+                const headerIndex = changeLog.indexOf('# Change Log') + 1;
+
+                changeLog.splice(headerIndex, 0, `\n## v${this.pkgJson.version}\n\n${log}`);
+                writeFileSync(changeLogFile, changeLog.join('\n'), 'utf8');
+
+                return Promise.resolve();
+            });
+    }
+
     run () {
         return Promise.resolve()
-            .then(() => this._updatePluginXml())
-            .then(() => this.git.status())
-            .then(() => this.git.add())
-            .then(() => this.git.commit(
-                !this.pkgJson.version.includes('-dev')
-                    ? `:bookmark: Release bump version: ${this.pkgJson.version}`
-                    : `:gear: Bump dev version: ${this.pkgJson.version}`
-            ))
-            .then(() => this.git.push(`master`))
-            .then(() => !this.pkgJson.version.includes('-dev')
-                ? this.git.tag(`draft/${this.pkgJson.version}`)
-                : Promise.resolve()
-            )
-            .then(() => !this.pkgJson.version.includes('-dev')
-                ? this.git.pushTag()
-                : Promise.resolve()
-            );
+            // .then(() => this._updatePluginXml())
+            // .then(() => this.git.status())
+            // .then(() => this.git.add())
+            // .then(() => this.git.commit(
+            //     !this.pkgJson.version.includes('-dev')
+            //         ? `:bookmark: Release bump version: ${this.pkgJson.version}`
+            //         : `:gear: Bump dev version: ${this.pkgJson.version}`
+            // ))
+            .then(() => this._updateChangeLog());
+            // .then(() => this.git.push(`master`))
+            // .then(() => !this.pkgJson.version.includes('-dev')
+            //     ? this.git.tag(`draft/${this.pkgJson.version}`)
+            //     : Promise.resolve()
+            // )
+            // .then(() => !this.pkgJson.version.includes('-dev')
+            //     ? this.git.pushTag()
+            //     : Promise.resolve()
+            // );
     }
 }
 
